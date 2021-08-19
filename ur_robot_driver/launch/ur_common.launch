@@ -20,6 +20,7 @@
   <arg name="tool_tcp_port" default="54321" doc="Port on which the robot controller publishes the tool comm interface. Only used, when `use_tool_communication` is set to true."/>
   <arg name="robot_description_file" doc="Robot description launch file."/>
   <arg name="headless_mode" default="false" doc="Automatically send URScript to robot to execute. On e-Series this does require the robot to be in 'remote-control' mode. With this, the URCap is not needed on the robot."/>
+  <arg name="keep_alive_count" default="1" doc="Specify the number of allowed timeout reads on the robot."/>
 
   <!-- robot model -->
   <include file="$(arg robot_description_file)">
@@ -49,5 +50,6 @@
     <arg name="tool_tx_idle_chars" value="$(arg tool_tx_idle_chars)"/>
     <arg name="tool_device_name" value="$(arg tool_device_name)"/>
     <arg name="tool_tcp_port" value="$(arg tool_tcp_port)"/>
+    <arg name="keep_alive_count" value="$(arg keep_alive_count)"/>
   </include>
 </launch>

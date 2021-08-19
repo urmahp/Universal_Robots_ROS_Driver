@@ -151,6 +151,9 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
     return false;
   }
 
+  // Specify the number of allowed timeout reads on the robot.
+  uint32_t keep_alive_count = robot_hw_nh.param("keep_alive_count", 1);
+
   // Whenever the runtime state of the "External Control" program node in the UR-program changes, a
   // message gets published here. So this is equivalent to the information whether the robot accepts
   // commands from ROS side.
@@ -274,6 +277,8 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
     ROS_FATAL_STREAM(e.what());
     return false;
   }
+  
+  ur_driver_->setKeepaliveCount(keep_alive_count);
 
   // Send arbitrary script commands to this topic. Note: On e-Series the robot has to be in
   // remote-control mode.
