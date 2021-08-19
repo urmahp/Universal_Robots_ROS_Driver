@@ -277,7 +277,7 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
     ROS_FATAL_STREAM(e.what());
     return false;
   }
-  
+
   ur_driver_->setKeepaliveCount(keep_alive_count);
 
   // Send arbitrary script commands to this topic. Note: On e-Series the robot has to be in
