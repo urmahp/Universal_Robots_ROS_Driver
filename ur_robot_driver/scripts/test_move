@@ -1,0 +1,129 @@
+#!/usr/bin/env python
+import sys
+import rospy
+import actionlib
+from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryGoal
+from trajectory_msgs.msg import JointTrajectoryPoint
+from controller_manager_msgs.srv import SwitchControllerRequest, SwitchController
+from controller_manager_msgs.srv import LoadControllerRequest, LoadController
+from std_msgs.msg import Bool
+from std_srvs.srv import Trigger
+
+JOINT_NAMES = [
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
+]
+
+# All of those controllers can be used to execute joint-based trajectories.
+# The scaled versions should be preferred over the non-scaled versions.
+JOINT_TRAJECTORY_CONTROLLERS = [
+    "scaled_pos_joint_traj_controller",
+    "scaled_vel_joint_traj_controller",
+    "pos_joint_traj_controller",
+    "vel_joint_traj_controller"
+]
+
+class TrajectoryClient:
+    """Small trajectory client to test a joint trajectory"""
+
+    def __init__(self):
+        rospy.init_node("test_move")
+
+        timeout = rospy.Duration(5)
+        self.switch_srv = rospy.ServiceProxy(
+            "controller_manager/switch_controller", SwitchController
+        )
+        self.load_srv = rospy.ServiceProxy("controller_manager/load_controller", LoadController)
+        try:
+            self.switch_srv.wait_for_service(timeout.to_sec())
+        except rospy.exceptions.ROSException as err:
+            rospy.logerr("Could not reach controller switch service. Msg: {}".format(err))
+            sys.exit(-1)
+
+        self.joint_trajectory_controller = JOINT_TRAJECTORY_CONTROLLERS[0]
+
+    def send_trajectory(self):
+        """Creates a trajectory, that moves the robot between two waypoints, while force mode is applied."""
+        # make sure the correct controller is loaded and activated
+        self.wait_for_robot()
+
+        self.switch_controller(self.joint_trajectory_controller)
+
+        trajectory_client = actionlib.SimpleActionClient(
+            "{}/follow_joint_trajectory".format(self.joint_trajectory_controller),
+            FollowJointTrajectoryAction,
+        )
+        timeout = rospy.Duration(10)
+        try:
+            trajectory_client.wait_for_server(timeout)
+        except rospy.exceptions.ROSException as err:
+            rospy.logerr("Could not reach controller action. Make sure that the driver is actually running.")
+            sys.exit(-1)
+
+        # Create and fill trajectory goal
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory.joint_names = JOINT_NAMES
+
+        position_list = [[ -0.857, -2.270, -0.989, -1.616, 1.562, 0.646]]
+        position_list.append([-0.275, -2.552, -0.990, -1.616, 1.562, 0.646])
+        position_list.append([0.266, -2.412, -0.793, -1.789, 1.562, 0.646])
+        position_list.append([ -0.138,  -2.862, -0.792, -1.789, 1.562, 0.646])
+        position_list.append([ -0.857, -2.270, -0.989, -1.616, 1.562, 0.646])
+        duration_list = [3.0, 6.0, 9.0, 12.0, 15.0]
+        for i, position in enumerate(position_list):
+            point = JointTrajectoryPoint()
+            point.positions = position
+            point.time_from_start = rospy.Duration(duration_list[i])
+            goal.trajectory.points.append(point)
+
+        rospy.loginfo("Executing trajectory using the {}".format(self.joint_trajectory_controller))
+
+        trajectory_client.send_goal(goal)
+        trajectory_client.wait_for_result()
+
+        result = trajectory_client.get_result()
+        rospy.loginfo("Trajectory execution finished in state {}".format(result.error_code))
+
+
+    def switch_controller(self, target_controller):
+        """Activates the desired controller and stops all others from the predefined list above"""
+        other_controllers = (
+            JOINT_TRAJECTORY_CONTROLLERS
+        )
+
+        other_controllers.remove(target_controller)
+
+        srv = LoadControllerRequest()
+        srv.name = target_controller
+        self.load_srv(srv)
+
+        srv = SwitchControllerRequest()
+        srv.stop_controllers = other_controllers
+        srv.start_controllers = [target_controller]
+        srv.strictness = SwitchControllerRequest.BEST_EFFORT
+        self.switch_srv(srv)
+
+    def wait_for_robot(self):
+        program_running = False
+        while program_running == False:
+            msg = rospy.wait_for_message('/ur_hardware_interface/robot_program_running', Bool)
+            program_running = msg.data
+
+if __name__ == "__main__":
+    client = TrajectoryClient()
+    hand_back_control_srv = rospy.ServiceProxy('/ur_hardware_interface/hand_back_control',
+                                                Trigger)
+    timeout = rospy.Duration(10)
+    try:
+        hand_back_control_srv.wait_for_service(timeout)
+    except rospy.exceptions.ROSException as err:
+        rospy.logerr("Could not reach handback control action. Make sure that the driver is actually running.")
+        sys.exit(-1)
+
+    client.send_trajectory()
+
+    hand_back_control_srv.call()

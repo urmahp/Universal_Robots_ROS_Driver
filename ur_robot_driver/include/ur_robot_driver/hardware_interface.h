@@ -56,6 +56,8 @@
 
 #include <industrial_robot_status_interface/industrial_robot_status_interface.h>
 
+#include <vector>
+
 namespace ur_driver
 {
 /*!
@@ -155,6 +157,12 @@ public:
    */
   bool shouldResetControllers();
 
+  /*!
+   * \brief print target joint data and joint data to two different files. 
+   * 
+   */
+  void printData(std::string target_joint_data_file, std::string joint_data_file);
+
 protected:
   /*!
    * \brief Transforms force-torque measurements reported from the robot from base to tool frame.
@@ -228,6 +236,7 @@ protected:
   urcl::vector6d_t joint_position_command_;
   urcl::vector6d_t joint_velocity_command_;
   urcl::vector6d_t joint_positions_;
+  urcl::vector6d_t joint_positions_target_;
   urcl::vector6d_t joint_velocities_;
   urcl::vector6d_t joint_efforts_;
   urcl::vector6d_t fts_measurements_;
@@ -254,6 +263,11 @@ protected:
   int32_t safety_mode_;
   std::bitset<4> robot_status_bits_;
   std::bitset<11> safety_status_bits_;
+  // Used for plotting
+  std::vector<urcl::vector6d_t> joint_positions_target_list_;
+  std::vector<urcl::vector6d_t> joint_position_list_;
+  std::vector<double> time_;
+  double current_time_;
 
   std::unique_ptr<realtime_tools::RealtimePublisher<tf2_msgs::TFMessage>> tcp_pose_pub_;
   std::unique_ptr<realtime_tools::RealtimePublisher<ur_msgs::IOStates>> io_pub_;

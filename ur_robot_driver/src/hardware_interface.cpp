@@ -32,6 +32,7 @@
 #include <ur_msgs/SetPayload.h>
 
 #include <Eigen/Geometry>
+#include <fstream>
 
 using industrial_robot_status_interface::RobotMode;
 using industrial_robot_status_interface::TriState;
@@ -53,6 +54,7 @@ HardwareInterface::HardwareInterface()
   : joint_position_command_({ 0, 0, 0, 0, 0, 0 })
   , joint_velocity_command_({ 0, 0, 0, 0, 0, 0 })
   , joint_positions_{ { 0, 0, 0, 0, 0, 0 } }
+  , joint_positions_target_{ { 0, 0, 0, 0, 0, 0 } }
   , joint_velocities_{ { 0, 0, 0, 0, 0, 0 } }
   , joint_efforts_{ { 0, 0, 0, 0, 0, 0 } }
   , standard_analog_input_{ { 0, 0 } }
@@ -399,6 +401,8 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
         resp.success = this->ur_driver_->sendScript(cmd.str());
         return true;
       });
+  
+  current_time_ = 0;
 
   return true;
 }
@@ -442,13 +446,16 @@ void HardwareInterface::read(const ros::Time& time, const ros::Duration& period)
   if (data_pkg)
   {
     packet_read_ = true;
+    urcl::vector6d_t target_tcp_pose;
     readData(data_pkg, "actual_q", joint_positions_);
+    readData(data_pkg, "target_q", joint_positions_target_);
     readData(data_pkg, "actual_qd", joint_velocities_);
     readData(data_pkg, "target_speed_fraction", target_speed_fraction_);
     readData(data_pkg, "speed_scaling", speed_scaling_);
     readData(data_pkg, "runtime_state", runtime_state_);
     readData(data_pkg, "actual_TCP_force", fts_measurements_);
     readData(data_pkg, "actual_TCP_pose", tcp_pose_);
+    readData(data_pkg, "target_TCP_pose", target_tcp_pose);
     readData(data_pkg, "standard_analog_input0", standard_analog_input_[0]);
     readData(data_pkg, "standard_analog_input1", standard_analog_input_[1]);
     readData(data_pkg, "standard_analog_output0", standard_analog_output_[0]);
@@ -468,6 +475,14 @@ void HardwareInterface::read(const ros::Time& time, const ros::Duration& period)
     readBitsetData<uint64_t>(data_pkg, "actual_digital_output_bits", actual_dig_out_bits_);
     readBitsetData<uint32_t>(data_pkg, "analog_io_types", analog_io_types_);
     readBitsetData<uint32_t>(data_pkg, "tool_analog_input_types", tool_analog_input_types_);
+
+    // ROS_INFO_STREAM("target " <<  target_joint_pos[0] << " " << target_joint_pos[1] << " " << target_joint_pos[2]);
+    // ROS_INFO_STREAM("actual " <<  joint_positions_[0] << " " << joint_positions_[1] << " " << joint_positions_[2]);
+
+    // ROS_INFO_STREAM("target " <<  target_tcp_pose[0] << " " << target_tcp_pose[1] << " " << target_tcp_pose[2]);
+    // ROS_INFO_STREAM("actual " <<  tcp_pose_[0] << " " << tcp_pose_[1] << " " << tcp_pose_[2]);
+
+    // ROS_INFO_STREAM("actual " <<  tcp_pose_[2] << " target " << target_tcp_pose[2]);
 
     extractRobotStatus();
 
@@ -538,6 +553,10 @@ void HardwareInterface::write(const ros::Time& time, const ros::Duration& period
        runtime_state_ == static_cast<uint32_t>(rtde::RUNTIME_STATE::PAUSING)) &&
       robot_program_running_ && (!non_blocking_read_ || packet_read_))
   {
+    current_time_ += period.toSec();
+    joint_positions_target_list_.push_back(joint_positions_target_);
+    joint_position_list_.push_back(joint_positions_);
+    time_.push_back(current_time_);
     if (position_controller_running_)
     {
       ur_driver_->writeJointCommand(joint_position_command_, urcl::comm::ControlMode::MODE_SERVOJ);
@@ -980,6 +999,35 @@ bool HardwareInterface::checkControllerClaims(const std::set<std::string>& claim
   }
   return false;
 }
+
+void HardwareInterface::printData(std::string target_joint_data_file, std::string joint_data_file)
+{
+  std::ofstream target_joint_data;
+  std::ofstream actual_joint_data;
+
+  // empty files
+  actual_joint_data.open(joint_data_file);
+  target_joint_data.open(target_joint_data_file);
+  target_joint_data.close();
+  actual_joint_data.close();
+
+  actual_joint_data.open(joint_data_file, std::fstream::app);
+  target_joint_data.open(target_joint_data_file, std::fstream::app);
+
+  for (unsigned int i = 0; i < time_.size(); ++i)
+  {
+    actual_joint_data << time_[i] << "," << joint_position_list_.at(i)[0] << "," << joint_position_list_.at(i)[1] << ","
+                      << joint_position_list_.at(i)[2] << "," << joint_position_list_.at(i)[3] << ","
+                      << joint_position_list_.at(i)[4] << "," << joint_position_list_.at(i)[5] << "\n";
+    target_joint_data << time_[i] << "," << joint_positions_target_list_.at(i)[0] << ","
+                      << joint_positions_target_list_.at(i)[1] << "," << joint_positions_target_list_.at(i)[2] << ","
+                      << joint_positions_target_list_.at(i)[3] << "," << joint_positions_target_list_.at(i)[4] << ","
+                      << joint_positions_target_list_.at(i)[5] << "\n";
+  }
+  target_joint_data.close();
+  actual_joint_data.close();
+}
+
 }  // namespace ur_driver
 
 PLUGINLIB_EXPORT_CLASS(ur_driver::HardwareInterface, hardware_interface::RobotHW)

@@ -37,6 +37,7 @@ void signalHandler(int signum)
 {
   std::cout << "Interrupt signal (" << signum << ") received.\n";
 
+  g_hw_interface->printData(std::string(getenv("HOME")) + "/target_joint.txt", std::string(getenv("HOME")) + "/actual_joint.txt");
   g_hw_interface.reset();
   // cleanup and close up stuff here
   // terminate program

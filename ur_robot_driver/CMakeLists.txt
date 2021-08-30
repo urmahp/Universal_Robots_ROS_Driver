@@ -132,6 +132,9 @@ install(TARGETS ur_robot_driver_plugin urcl_log_handler ur_robot_driver_node rob
 catkin_install_python(PROGRAMS scripts/tool_communication
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
+catkin_install_python(PROGRAMS scripts/test_move_target
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+
 install(DIRECTORY config launch resources
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 
