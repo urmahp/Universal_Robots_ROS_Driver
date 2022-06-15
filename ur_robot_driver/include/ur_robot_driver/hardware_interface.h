@@ -231,6 +231,8 @@ protected:
 
   void startCartesianInterpolation(const hardware_interface::CartesianTrajectory& trajectory);
 
+  void startCartesianSplineInterpolation(const hardware_interface::CartesianTrajectory& trajectory);
+
   void cancelInterpolation();
 
   void passthroughTrajectoryDoneCb(urcl::control::TrajectoryResult result);

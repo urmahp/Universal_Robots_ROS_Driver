@@ -364,18 +364,19 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
   // Register callbacks for trajectory passthrough
   if (use_spline_interpolation)
   {
-    std::cout << "spline interpolation is being setup !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! " << std::endl;
     jnt_traj_interface_.registerGoalCallback(
         std::bind(&HardwareInterface::startJointSplineInterpolation, this, std::placeholders::_1));
+    cart_traj_interface_.registerGoalCallback(
+        std::bind(&HardwareInterface::startCartesianSplineInterpolation, this, std::placeholders::_1));
   }
   else
   {
     jnt_traj_interface_.registerGoalCallback(
         std::bind(&HardwareInterface::startJointInterpolation, this, std::placeholders::_1));
+    cart_traj_interface_.registerGoalCallback(
+        std::bind(&HardwareInterface::startCartesianInterpolation, this, std::placeholders::_1));
   }
   jnt_traj_interface_.registerCancelCallback(std::bind(&HardwareInterface::cancelInterpolation, this));
-  cart_traj_interface_.registerGoalCallback(
-      std::bind(&HardwareInterface::startCartesianInterpolation, this, std::placeholders::_1));
   cart_traj_interface_.registerCancelCallback(std::bind(&HardwareInterface::cancelInterpolation, this));
 
   ros_controllers_cartesian::CartesianStateHandle handle(tf_prefix_ + "base", tf_prefix_ + "tool0_controller",
@@ -1281,7 +1282,7 @@ void HardwareInterface::startJointSplineInterpolation(const hardware_interface::
       a[3] = point.accelerations[3];
       a[4] = point.accelerations[4];
       a[5] = point.accelerations[5];
-      ur_driver_->writeSplinePoint(p, v, a, next_time - last_time);
+      ur_driver_->writeJointSplinePoint(p, v, a, next_time - last_time);
     }
     else if (point.velocities.size() == 6)
     {
@@ -1292,11 +1293,11 @@ void HardwareInterface::startJointSplineInterpolation(const hardware_interface::
       v[3] = point.velocities[3];
       v[4] = point.velocities[4];
       v[5] = point.velocities[5];
-      ur_driver_->writeSplinePoint(p, v, next_time - last_time);
+      ur_driver_->writeJointSplinePoint(p, v, next_time - last_time);
     }
     else
     {
-      ur_driver_->writeSplinePoint(p, next_time - last_time);
+      ur_driver_->writeJointSplinePoint(p, next_time - last_time);
     }
     last_time = next_time;
   }
@@ -1326,6 +1327,71 @@ void HardwareInterface::startCartesianInterpolation(const hardware_interface::Ca
     p[5] = rot.GetRot().z();
     double next_time = point.time_from_start.toSec();
     ur_driver_->writeTrajectoryPoint(p, true, next_time - last_time);
+    last_time = next_time;
+  }
+  ROS_DEBUG("Finished Sending Trajectory");
+}
+
+void HardwareInterface::startCartesianSplineInterpolation(const hardware_interface::CartesianTrajectory& trajectory)
+{
+  size_t point_number = trajectory.trajectory.points.size();
+  ROS_DEBUG("Starting joint-based trajectory forward using splines");
+  ur_driver_->writeTrajectoryControlMessage(urcl::control::TrajectoryControlMessage::TRAJECTORY_START, point_number,
+                                            true);
+  double last_time = 0.0;
+  for (size_t i = 0; i < point_number; i++)
+  {
+    cartesian_control_msgs::CartesianTrajectoryPoint point = trajectory.trajectory.points[i];
+    urcl::vector7d_t p;
+    p[0] = point.pose.position.x;
+    p[1] = point.pose.position.y;
+    p[2] = point.pose.position.z;
+
+    p[3] = point.pose.orientation.w;
+    p[4] = point.pose.orientation.x;
+    p[5] = point.pose.orientation.y;
+    p[6] = point.pose.orientation.z;
+    double next_time = point.time_from_start.toSec();
+
+    if (std::isnan(point.twist.linear.x) || std::isnan(point.twist.linear.y) ||
+        std::isnan(point.twist.linear.z) || std::isnan(point.twist.angular.x) ||
+        std::isnan(point.twist.angular.y) || std::isnan(point.twist.angular.z))
+    {
+      ur_driver_->writeCartesianSplinePoint(p, next_time - last_time);
+    }
+    else if (std::isnan(point.acceleration.linear.x) || std::isnan(point.acceleration.linear.y) ||
+             std::isnan(point.acceleration.linear.z) || std::isnan(point.acceleration.angular.x) ||
+             std::isnan(point.acceleration.angular.y) || std::isnan(point.acceleration.angular.z))
+    {
+      std::cout << "velocity is within the message" << std::endl;
+      urcl::vector6d_t v;
+      v[0] = point.twist.linear.x;
+      v[1] = point.twist.linear.y;
+      v[2] = point.twist.linear.z;
+      v[3] = point.twist.angular.x;
+      v[4] = point.twist.angular.y;
+      v[5] = point.twist.angular.z;
+      ur_driver_->writeCartesianSplinePoint(p, v, next_time - last_time);
+    }
+    else
+    {
+      std::cout << "acceleration is within the message" << std::endl;
+      urcl::vector6d_t v, a;
+      v[0] = point.twist.linear.x;
+      v[1] = point.twist.linear.y;
+      v[2] = point.twist.linear.z;
+      v[3] = point.twist.angular.x;
+      v[4] = point.twist.angular.y;
+      v[5] = point.twist.angular.z;
+
+      a[0] = point.acceleration.linear.x;
+      a[1] = point.acceleration.linear.y;
+      a[2] = point.acceleration.linear.z;
+      a[3] = point.acceleration.angular.x;
+      a[4] = point.acceleration.angular.y;
+      a[5] = point.acceleration.angular.z;
+      ur_driver_->writeCartesianSplinePoint(p, v, a, next_time - last_time);
+    }
     last_time = next_time;
   }
   ROS_DEBUG("Finished Sending Trajectory");
