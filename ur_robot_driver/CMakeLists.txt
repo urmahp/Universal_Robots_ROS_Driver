@@ -124,6 +124,12 @@ add_executable(robot_state_helper
 target_link_libraries(robot_state_helper ${catkin_LIBRARIES} ur_client_library::urcl)
 add_dependencies(robot_state_helper ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+add_executable(cart_traj
+  src/cart_traj.cpp
+)
+target_link_libraries(cart_traj ${catkin_LIBRARIES} ur_client_library::urcl)
+add_dependencies(cart_traj ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 if(CATKIN_ENABLE_TESTING)
   find_package(rostest REQUIRED)
 
